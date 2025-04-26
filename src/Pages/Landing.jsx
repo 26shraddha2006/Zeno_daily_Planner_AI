@@ -34,11 +34,18 @@ const LandingPage = () => {
       'routine', 'daily', 'weekly', 'monthly', 'timeline',
       'productivity', 'efficiency', 'workflow', 'arrange',
       'prepare', 'allocate', 'manage time', 'to-do',
-      'planner', 'organizer', 'time block', 'event'
+      'planner', 'organizer', 'time block', 'event',
+      'exam', 'study', 'morning', 'evening', 'day', 'week',
+      'prep', 'revision', 'fitness', 'workout', 'health',
+      'habit', 'chore', 'errand', 'session', 'preparation',
+      'timetable', 'regimen', 'program', 'checklist'
     ];
     
     const lowerText = text.toLowerCase();
-    return planningKeywords.some(keyword => lowerText.includes(keyword));
+    return planningKeywords.some(keyword => 
+      lowerText.includes(keyword) || 
+      keyword.includes(lowerText)
+    );
   };
 
   const handleSubmit = async () => {
@@ -47,11 +54,10 @@ const LandingPage = () => {
       return;
     }
 
-    // Strictly reject non-planning related queries
     if (!isPlanningRelated(input)) {
-      toast.error("Please ask about daily planning or scheduling only.");
+      toast.error("Please ask about planning or scheduling.");
       setResponse({
-        error: "I specialize exclusively in daily planning and scheduling. Please ask me about:\n\n- Creating daily/weekly plans\n- Organizing tasks\n- Time management strategies\n- Prioritizing your schedule\n- Setting up reminders\n- Productivity tips for your routine"
+        error: "I specialize in creating plans and routines. Please ask me about:\n\n- Daily/weekly routines\n- Study/exam plans\n- Work schedules\n- Fitness regimens\n- Time management strategies\n- Task organization"
       });
       return;
     }
@@ -61,34 +67,37 @@ const LandingPage = () => {
 
     try {
       const prompt = `
-You are Zeno Planner - an AI daily planning assistant. Your ONLY purpose is to help users plan their daily tasks, schedule, and time management. 
+You are Zeno Planner - an AI planning assistant specialized in creating structured routines and schedules. 
 
-STRICT RULES:
-1. ONLY respond to queries about planning, scheduling, and organizing daily activities
-2. REJECT all other topics with: "I specialize in daily planning. How can I help organize your schedule?"
-3. NEVER answer programming, technical, or unrelated questions
-4. FORMAT all responses as structured planning advice
-5. REJECT casual conversation like greetings or small talk
+ACCEPTABLE REQUESTS INCLUDE:
+- Daily/weekly/monthly routines (morning, evening, etc.)
+- Study/exam preparation plans (1 day, 3 days, 1 week, etc.)
+- Work schedules and task organization
+- Fitness/health routines
+- Time management strategies
+- Habit building plans
 
-For valid planning requests, create a detailed plan with this EXACT format:
+For valid requests, create a detailed plan with this flexible format:
 
 {
   "task": "task_name",
-  "suggested_time": "total time needed",
+  "duration": "total time or period needed (e.g., '2 hours' or '3 days')",
   "priority": "low/medium/high",
   "reminders": ["motivational quote about productivity"],
   "steps": [
     {
       "step": "Step Title",
       "description": "Detailed instructions",
-      "time_allocation": "e.g. 30 minutes",
-      "timeline": "9:00 AM - 9:30 AM"
+      "time_allocation": "e.g. 30 minutes or Day 1 Morning",
+      "timeline": "9:00 AM - 9:30 AM or Day 1: Morning"
     }
   ],
   "pro_tips": "Productivity tip related to the task"
 }
 
-User input: "${input}"
+For multi-day plans, structure steps with day numbers (Day 1, Day 2, etc.).
+
+USER REQUEST: "${input}"
 `;
 
       const res = await model.generateContent(prompt);
@@ -98,24 +107,46 @@ User input: "${input}"
         throw new Error("Failed to generate plan. Please try again.");
       }
 
-      // Additional check for off-topic responses
-      if (responseText.includes("I specialize in daily planning") || 
-          responseText.includes("I can't answer that")) {
-        throw new Error("I specialize in daily planning. How can I help organize your schedule?");
+      // More flexible response handling
+      let jsonResponse;
+      try {
+        const jsonMatch = responseText.match(/(\{[\s\S]*\})/);
+        if (jsonMatch) {
+          jsonResponse = JSON.parse(jsonMatch[1]);
+        } else {
+          // If no JSON found but response looks structured, create a simplified plan
+          if (responseText.includes("Step") || responseText.includes("Day")) {
+            jsonResponse = {
+              task: input,
+              duration: "Custom duration",
+              steps: responseText.split('\n')
+                .filter(line => line.trim().length > 0)
+                .map((line, index) => ({
+                  step: `Step ${index + 1}`,
+                  description: line.trim(),
+                  time_allocation: "Custom time",
+                  timeline: "Flexible schedule"
+                }))
+            };
+          } else {
+            throw new Error("I specialize in creating plans. Try being more specific about your routine needs.");
+          }
+        }
+      } catch (e) {
+        console.error("JSON parse error:", e);
+        throw new Error("Let me help structure that better. Could you clarify your planning needs?");
       }
 
-      const jsonMatch = responseText.match(/```json\n([\s\S]*?)\n```/);
-      if (!jsonMatch) {
-        throw new Error("I couldn't create a proper plan. Please try being more specific about your scheduling needs.");
-      }
-
-      const jsonResponse = JSON.parse(jsonMatch[1]);
       setResponse(jsonResponse);
       toast.success("Plan generated successfully! 🚀");
     } catch (error) {
       console.error("Error:", error.message);
-      setResponse({ error: error.message });
-      if (!error.message.includes("specialize in daily planning")) {
+      setResponse({ 
+        error: error.message.includes("specialize") 
+          ? error.message 
+          : "Planning error - please try again with more details"
+      });
+      if (!error.message.includes("specialize")) {
         toast.error("Planning error - please try again");
       }
     } finally {
@@ -150,7 +181,7 @@ User input: "${input}"
           {text}
         </h1>
         <p className="text-lg text-gray-300 max-w-2xl mb-10">
-          Your smarter way to plan tasks and achieve goals, powered by AI.
+          Your smarter way to plan tasks, routines, and achieve goals, powered by AI.
         </p>
         <a href="#get-started" className="bg-cyan-500 hover:bg-cyan-600 px-6 py-3 rounded-xl text-white text-lg font-semibold transition-all">
           Get Started Now
@@ -161,8 +192,9 @@ User input: "${input}"
       <section id="about" className="py-16 w-full max-w-5xl px-6">
         <h2 className="text-4xl font-bold text-center text-cyan-400 mb-8">About Zeno Planner</h2>
         <p className="text-center text-gray-400 text-lg leading-relaxed">
-          Zeno Planner transforms your big goals into small, actionable tasks using smart AI planning. It suggests optimal time slots, breaks down tasks step-by-step, and even motivates you with personalized pro tips! 
-          Focus better. Stress less. Achieve more. 🚀
+          Zeno Planner transforms your goals into actionable routines using smart AI planning. 
+          It creates morning/evening routines, study schedules, workout plans, and more - 
+          with optimal time slots and step-by-step guidance. Focus better. Stress less. Achieve more. 🚀
         </p>
       </section>
 
@@ -172,32 +204,32 @@ User input: "${input}"
         <div className="grid md:grid-cols-3 gap-8 text-center">
           <div className="p-6 bg-gray-900 rounded-2xl shadow-lg hover:scale-105 transition-all">
             <FaTasks className="text-5xl mx-auto text-cyan-400 mb-4" />
-            <h3 className="text-2xl font-semibold mb-2">Task Breakdown</h3>
-            <p>Clear, actionable steps for any goal you input.</p>
+            <h3 className="text-2xl font-semibold mb-2">Smart Routines</h3>
+            <p>Custom morning/evening routines tailored to your needs.</p>
           </div>
           <div className="p-6 bg-gray-900 rounded-2xl shadow-lg hover:scale-105 transition-all">
             <FaRocket className="text-5xl mx-auto text-yellow-400 mb-4" />
-            <h3 className="text-2xl font-semibold mb-2">Boosted Productivity</h3>
-            <p>Smart scheduling keeps your momentum alive every day.</p>
+            <h3 className="text-2xl font-semibold mb-2">Study Plans</h3>
+            <p>Effective exam preparation schedules for any timeframe.</p>
           </div>
           <div className="p-6 bg-gray-900 rounded-2xl shadow-lg hover:scale-105 transition-all">
             <FaRobot className="text-5xl mx-auto text-pink-400 mb-4" />
-            <h3 className="text-2xl font-semibold mb-2">AI Motivation</h3>
-            <p>Daily tips and reminders that keep you inspired and consistent.</p>
+            <h3 className="text-2xl font-semibold mb-2">Habit Building</h3>
+            <p>Structured plans to develop and maintain healthy habits.</p>
           </div>
         </div>
       </section>
 
       {/* Get Started Section */}
       <section id="get-started" className="py-20 w-full max-w-2xl px-6">
-        <h2 className="text-3xl font-bold text-center text-blue-400 mb-8">Plan Your Day 🚀</h2>
+        <h2 className="text-3xl font-bold text-center text-blue-400 mb-8">Create Your Plan 🚀</h2>
         <div className="relative">
           <input
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             className="w-full p-5 bg-gray-900/70 backdrop-blur-md rounded-xl border border-gray-700 focus:ring-4 focus:ring-cyan-500 placeholder-gray-400 text-white text-lg"
-            placeholder="📝 What's your goal today? (e.g. 'Plan my workday', 'Organize study schedule')"
+            placeholder="📝 What would you like to plan? (e.g. 'Morning routine', '3-day study plan', 'Workout schedule')"
             onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
           />
           <button
@@ -205,11 +237,11 @@ User input: "${input}"
             className="absolute right-3 top-3 bottom-3 bg-gradient-to-r from-purple-500 via-pink-500 to-red-500 px-6 rounded-xl font-semibold hover:scale-105 transition-all disabled:opacity-50"
             disabled={loading}
           >
-            {loading ? "Planning..." : "Plan Now"}
+            {loading ? "Planning..." : "Create Plan"}
           </button>
         </div>
         <p className="text-gray-400 text-sm mt-2 text-center">
-          Examples: "Work project deadline", "Gym routine", "Study plan for exams"
+          Examples: "Morning routine for workdays", "3-day exam study plan", "Weekly workout schedule"
         </p>
       </section>
 
@@ -221,31 +253,40 @@ User input: "${input}"
               <p className="text-red-400 text-lg mb-2">{response.error}</p>
               <p className="text-cyan-300">Try asking about:</p>
               <ul className="list-disc list-inside text-left mt-2 text-gray-300">
-                <li>Daily work schedule</li>
-                <li>Study plan for exams</li>
-                <li>Fitness routine</li>
+                <li>Morning/evening routines</li>
+                <li>Study plans for exams</li>
+                <li>Weekly workout schedules</li>
                 <li>Time management strategies</li>
+                <li>Multi-day preparation plans</li>
               </ul>
             </div>
           ) : (
             <>
-              <h2 className="text-2xl font-bold text-cyan-400 mb-4">🗓 Your Smart Plan:</h2>
+              <h2 className="text-2xl font-bold text-cyan-400 mb-4">🗓 Your Custom Plan:</h2>
               <div className="mb-6">
-                <p><strong className="text-pink-400">Task:</strong> {response.task}</p>
-                <p><strong className="text-yellow-400">Suggested Time:</strong> {response.suggested_time}</p>
-                <p><strong className="text-green-400">Priority:</strong> <span className="capitalize">{response.priority}</span></p>
-                <p><strong className="text-purple-400">Reminder:</strong> {response.reminders?.[0] || "Stay focused!"}</p>
+                <p><strong className="text-pink-400">Task:</strong> {response.task || input}</p>
+                <p><strong className="text-yellow-400">Duration:</strong> {response.duration || "Custom duration"}</p>
+                <p><strong className="text-green-400">Priority:</strong> <span className="capitalize">{response.priority || "medium"}</span></p>
+                {response.reminders && (
+                  <p><strong className="text-purple-400">Reminder:</strong> {response.reminders[0]}</p>
+                )}
               </div>
 
               {response.steps && (
                 <div className="mb-6">
-                  <h3 className="text-xl font-semibold text-blue-300 mb-3">Step-by-Step:</h3>
+                  <h3 className="text-xl font-semibold text-blue-300 mb-3">Plan Details:</h3>
                   <ul className="space-y-3">
                     {response.steps.map((step, index) => (
                       <li key={index} className="p-4 bg-gray-900/70 rounded-lg">
-                        <p className="font-medium text-lg">Step {index + 1}: {step.step}</p>
+                        <p className="font-medium text-lg">{step.step || `Step ${index + 1}`}</p>
                         <p className="mt-1">{step.description}</p>
-                        <p className="text-sm text-gray-400 mt-2">⏱ {step.time_allocation} — 🕒 {step.timeline}</p>
+                        {(step.time_allocation || step.timeline) && (
+                          <p className="text-sm text-gray-400 mt-2">
+                            {step.time_allocation && `⏱ ${step.time_allocation}`}
+                            {step.time_allocation && step.timeline && " — "}
+                            {step.timeline && `🕒 ${step.timeline}`}
+                          </p>
+                        )}
                       </li>
                     ))}
                   </ul>
